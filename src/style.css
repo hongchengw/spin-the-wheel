@@ -1,0 +1,59 @@
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* ---------- Theme ---------- */
+:root {
+  --bg: #12131a;
+  --surface: #1c1e29;
+  --text: #f2f3f7;
+  --muted: #9aa0b4;
+  --accent: #ffc94d;
+
+  --slice-1: #e5484d;
+  --slice-2: #2f6feb;
+  --slice-3: #f5a524;
+  --slice-4: #12a594;
+  --slice-5: #d6409f;
+  --slice-6: #5b5bd6;
+  --slice-7: #f76b15;
+  --slice-8: #46a758;
+}
+
+/* ---------- Base ---------- */
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.title {
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 1rem;
+}
