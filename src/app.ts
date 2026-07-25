@@ -35,12 +35,36 @@ function buildStage(doc: Document, svg: SVGSVGElement): HTMLElement {
   pointer.setAttribute('aria-hidden', 'true');
 
   const wheel = doc.createElement('div');
-  wheel.className = 'wheel';
+  // `is-spinning-up` starts stage 1 the moment the div lands in the document.
+  wheel.className = 'wheel is-spinning-up';
   wheel.id = 'wheel';
   wheel.appendChild(svg);
 
   stage.append(pointer, wheel);
   return stage;
+}
+
+/**
+ * Hands stage 1 (`spin-up`, a finite 2-turn accelerating run) over to stage 2
+ * (`spin`, constant rate, infinite) the instant the first animation ends.
+ *
+ * Both keyframes start and end on whole multiples of 360deg and stage 2 runs
+ * at the terminal velocity of the stage-1 easing, so the swap is invisible.
+ *
+ * The swap is one-way and one-shot: the listener detaches itself, so a second
+ * `animationend` (or any later event) cannot toggle back or stack classes.
+ * Nothing in this app ever removes `is-spinning`.
+ */
+function handOffToConstantSpin(wheel: HTMLElement): void {
+  const onEnd = (event: Event): void => {
+    // `animationend` bubbles; ignore anything from a descendant.
+    if (event.target !== wheel) return;
+    wheel.removeEventListener('animationend', onEnd);
+    wheel.classList.remove('is-spinning-up');
+    wheel.classList.add('is-spinning');
+  };
+
+  wheel.addEventListener('animationend', onEnd);
 }
 
 export function initApp(root: AppRoot): void {
@@ -70,8 +94,12 @@ export function initApp(root: AppRoot): void {
     spinning = true;
 
     const svg = buildWheel(readLabels(form));
-    spinPanel.replaceChildren(buildStage(doc, svg));
+    const stage = buildStage(doc, svg);
+    spinPanel.replaceChildren(stage);
     spinPanel.removeAttribute('hidden');
+
+    const wheel = required<HTMLElement>(stage, '.wheel');
+    handOffToConstantSpin(wheel);
 
     // Removed, not hidden: the form must be unreachable by tab or devtools.
     // A reload is the only way back to setup.

@@ -137,25 +137,40 @@ The **container `<div>`** wrapping the SVG rotates — not an SVG node. Rotating
 ### 5.2 Two-stage spin
 
 ```css
-@keyframes spin-up { from { transform: rotate(0deg);    }
-                     to   { transform: rotate(1440deg); } }
-@keyframes spin    { from { transform: rotate(0deg);    }
-                     to   { transform: rotate(360deg);  } }
+@keyframes spin-up { from { transform: rotate(0deg);   }
+                     to   { transform: rotate(720deg); } }
+@keyframes spin    { from { transform: rotate(0deg);   }
+                     to   { transform: rotate(360deg); } }
 ```
 
-- **Stage 1 (spin-up):** `spin-up 1.5s cubic-bezier(.3, 0, .7, .4) forwards` — 4 full turns, accelerating.
+- **Stage 1 (spin-up):** `spin-up 2s cubic-bezier(.3, 0, .55, .5) forwards` — 2 full turns, accelerating from rest.
 - **Handoff:** on the `animationend` event, JS swaps the class so stage 2 begins.
-- **Stage 2 (spin):** `spin .45s linear infinite` — constant rate, forever.
+- **Stage 2 (spin):** `spin .9s linear infinite` — 400°/s, constant, forever.
 
 Both stages start and end at whole multiples of 360°, so the handoff is geometrically seamless.
 
-**The stage-2 duration must be tuned to match the terminal velocity of the stage-1 easing curve.** If stage 2 is slower than the speed stage 1 ended at, the wheel visibly lurches at the 1.5s mark — the one moment that would give the whole gag away. `.45s` is the starting value; verify it visually and adjust if a seam is perceptible.
+**These numbers are derived backwards from the sustained speed, and must stay in sync.**
+
+1. **Pick the forever speed first.** 400°/s (~1.1 rev/s) is quick enough to read as a real prize wheel but slow enough that the labels the user just typed stay legible as they pass. This is the binding constraint: the wheel is on screen indefinitely, and a permanent unreadable blur reads as a rendering bug rather than a sincere spin. (An earlier iteration ran at 1920°/s — seamless, but a blur.)
+2. **Stage 1 must *end* at exactly that speed,** or the handoff lurches and gives the gag away. 720° over 2s averages 360°/s, so the easing must finish at `400 / 360 = 1.1111×` its average rate.
+3. **A cubic-bezier ends with slope `(1 - y2) / (1 - x2)`.** `x2 = .55, y2 = .5` gives `.5 / .45 = 1.1111` exactly. Its start slope `y1 / x1 = 0 / .3 = 0`, so it still pulls away from a dead stop.
+
+```
+terminal velocity = endSlope × (totalRotation / duration)
+                  = 1.1111 × (720° / 2s) = 400°/s = 360° / 0.9s
+```
+
+Known and accepted: the curve peaks at ~465°/s mid-windup (t≈1.26s) before easing back to 400°/s by t=2s. Any curve starting at slope 0 and ending above slope 1 must overshoot, since its average slope is 1 by construction. Measured at ≤10°/s per sample window, it is imperceptible, and it reads as a fling settling into a cruise. Removing it would cost a full turn of windup.
+
+`e2e/spin.spec.ts` asserts against `SPIN_PERIOD_S`; change both together.
 
 `will-change: transform` on the rotating container.
 
 ### 5.3 Pointer
 
-A fixed pip at 12 o'clock, layered above the wheel, with a drop shadow. It carries a subtle tick wobble animation (~`0.45s`, synced to slice passage). A perfectly still pointer over a spinning wheel reads as a broken render.
+A fixed pip at 12 o'clock, layered above the wheel, with a drop shadow. It carries a subtle ±3° tick wobble. A perfectly still pointer over a spinning wheel reads as a broken render.
+
+The tick period is `0.45s` — at a `0.9s` spin a slice passes every `0.9 / 8 = 0.1125s`, and `0.45s` is exactly 4 of those, so the wobble stays phase-locked to slice passage instead of drifting against it.
 
 ### 5.4 Reduced motion
 
@@ -278,7 +293,7 @@ Some properties are only observable in a real browser and **must** be E2E, not j
 3. `npm run e2e` — all Playwright tests pass.
 4. `npm run build && npm run preview` — production bundle behaves identically to dev.
 5. 8 distinct options render on the correct slices, all text inside the rim.
-6. Spin-up accelerates smoothly into a constant rate with **no perceptible lurch at ~1.5s**.
+6. Spin-up accelerates smoothly into a constant rate with **no perceptible lurch at the ~2s handoff**.
 7. Still spinning at a constant rate after several minutes — no drift, no restart.
 8. A 24-character option truncates cleanly rather than spilling off the wheel.
 9. Blank fields render as `Option N`.

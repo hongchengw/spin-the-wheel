@@ -71,10 +71,13 @@ body.spinning .subtitle {
   margin-top: 2rem;
 }
 
+/* The plain div rotates, never the <svg>: CSS rotation of an SVG element
+   needs transform-box / transform-origin fixes that differ per browser. */
 .wheel {
   position: relative;
   width: min(88vw, 420px);
   aspect-ratio: 1;
+  will-change: transform;
 }
 
 .wheel svg {
@@ -83,16 +86,94 @@ body.spinning .subtitle {
   height: 100%;
 }
 
+/* ---------- Spin ----------
+   Stage 1 accelerates from rest through two whole turns. Stage 2 then runs
+   forever at a constant rate. Both keyframes span whole multiples of 360deg,
+   so the class swap at 2s lands on the same geometry.
+
+   These numbers are derived, not guessed, and the derivation runs *backwards*
+   from the sustained speed:
+
+   1. Pick the forever speed first. 400deg/s (~1.1 rev/s, a 0.9s period) is
+      quick enough to read as a real prize wheel, but slow enough that the
+      labels the user just typed stay legible as they go past. This is the
+      constraint that matters: the wheel is on screen forever, and a permanent
+      unreadable blur reads as a rendering bug rather than a sincere spin.
+   2. Stage 1 is then shaped to *end* at exactly that speed, or the handoff
+      lurches and gives the gag away. 720deg over 2s averages 360deg/s, so the
+      easing must finish at 400 / 360 = 1.1111x its average rate.
+   3. A cubic-bezier ends with slope (1 - y2) / (1 - x2). x2 = 0.55, y2 = 0.5
+      gives 0.5 / 0.45 = 1.1111 exactly. The start slope y1 / x1 = 0 / 0.3 = 0,
+      so it still pulls away from a dead stop.
+
+   terminal velocity = endSlope * (totalRotation / duration)
+                     = 1.1111 * (720deg / 2s) = 400deg/s = 360deg / 0.9s
+
+   Keep this in sync with SPIN_PERIOD_S in e2e/spin.spec.ts. */
+@keyframes spin-up {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(720deg);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wheel.is-spinning-up {
+  animation: spin-up 2s cubic-bezier(0.3, 0, 0.55, 0.5) forwards;
+}
+
+.wheel.is-spinning {
+  animation: spin 0.9s linear infinite;
+}
+
 /* Sits above the wheel and outside it, so it never rotates along. */
 .pointer {
   position: absolute;
   top: -6px;
   left: 50%;
   z-index: 2;
+  transform-origin: 50% 0;
   transform: translateX(-50%);
   width: 0;
   height: 0;
   border-left: 14px solid transparent;
   border-right: 14px solid transparent;
   border-top: 24px solid var(--accent);
+}
+
+/* A dead-still pointer over a turning wheel reads as a broken render, so it
+   ticks as slices go past. At a 0.9s spin a slice passes every 0.9 / 8 =
+   0.1125s; 0.45s is exactly 4 of those, keeping the wobble phase-locked to
+   slice passage rather than drifting against it. */
+@keyframes pointer-tick {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(-3deg);
+  }
+  50% {
+    transform: translateX(-50%) rotate(3deg);
+  }
+}
+
+.pointer {
+  animation: pointer-tick 0.45s ease-in-out infinite;
+}
+
+/* The wheel spin is the app's entire function and is deliberately NOT gated
+   on reduced motion — a frozen wheel would be a blank screen. The pointer
+   wobble is incidental decoration, so that one goes. */
+@media (prefers-reduced-motion: reduce) {
+  .pointer {
+    animation: none;
+  }
 }

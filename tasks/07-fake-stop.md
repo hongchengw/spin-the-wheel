@@ -33,7 +33,7 @@ Current behavior: the user fills 8 inputs and clicks **Spin**. The setup panel i
 </div>
 ```
 
-The wheel spins up over 1.5s and then rotates forever at a constant rate via CSS keyframes. Theme custom properties available in `src/style.css` include `--bg`, `--surface`, `--text`, `--muted`, `--accent`.
+The wheel spins up over 2s and then rotates forever at a constant 400°/s (a `0.9s` period) via CSS keyframes. The class handoff from the accelerating stage to the constant stage happens at the 2s mark. Theme custom properties available in `src/style.css` include `--bg`, `--surface`, `--text`, `--muted`, `--accent`.
 
 ## What the app does
 
@@ -131,7 +131,7 @@ Drive the app into its spinning phase the way the existing `tests/phase.test.ts`
 
 ### `e2e/stop.spec.ts` (Playwright)
 
-16. **Clicking STOP does not stop the wheel.** Spin up, wait past the 1.5s handoff, click the stop button five times, wait ~2s, then sample `getComputedStyle('.wheel').transform` twice ~200ms apart and assert the values **differ**. The wheel is still turning.
+16. **Clicking STOP does not stop the wheel.** Spin up, wait past the 2s handoff (use ~2600ms, as the existing `e2e/spin.spec.ts` does), click the stop button five times, wait ~2s, then sample `getComputedStyle('.wheel').transform` twice ~200ms apart and assert the values **differ**. The wheel is still turning.
 17. **`animation-play-state` is still `running`** after clicking the stop button.
 18. **The shake animation replays on a second click** — verify the button's animation restarts rather than firing only once.
 19. **Taunt text is visible on screen** and updates as clicks accumulate, ending at `No.`
