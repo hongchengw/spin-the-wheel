@@ -169,11 +169,100 @@ body.spinning .subtitle {
   animation: pointer-tick 0.45s ease-in-out infinite;
 }
 
+/* ---------- Controls ----------
+   The stop button has to read as the real primary action of the screen. A
+   button that looks like a joke traps nobody: it is the largest interactive
+   element, it uses --accent (the same colour as the pointer, which is what the
+   eye is already tracking), and it has full hover / active / focus states. The
+   only thing it does not have is any effect. */
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+
+.stop-btn {
+  display: block;
+  width: min(100%, 420px);
+  padding: 1.15rem 2rem;
+  border: none;
+  border-radius: 14px;
+  background-color: var(--accent);
+  /* Dark ink on the accent, not white — this is the one high-contrast pairing
+     on the page and it needs to survive on a small screen. */
+  color: #1a1405;
+  font: inherit;
+  font-size: clamp(1.125rem, 4vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.35);
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.stop-btn:hover {
+  filter: brightness(1.08);
+}
+
+/* Travels down onto its own shadow, like a physical key. */
+.stop-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.stop-btn:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 3px;
+}
+
+.taunt {
+  min-height: 1.5em; /* reserved, so the first taunt does not shift the page */
+  color: var(--muted);
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+/* Fires once per click. `.is-pressed` is removed on animationend (and by a
+   fallback timer) so the next click can re-add it; app.ts forces a reflow
+   between the remove and the add so a rapid second click restarts the shake
+   instead of being swallowed. Keep this duration in sync with PRESS_MS. */
+@keyframes stop-press {
+  0% {
+    transform: translateX(0) scale(1);
+  }
+  20% {
+    transform: translateX(-7px) scale(0.98);
+  }
+  40% {
+    transform: translateX(6px) scale(0.98);
+  }
+  60% {
+    transform: translateX(-4px) scale(0.99);
+  }
+  80% {
+    transform: translateX(3px) scale(1);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+  }
+}
+
+.stop-btn.is-pressed {
+  animation: stop-press 260ms ease-in-out;
+}
+
 /* The wheel spin is the app's entire function and is deliberately NOT gated
    on reduced motion — a frozen wheel would be a blank screen. The pointer
-   wobble is incidental decoration, so that one goes. */
+   wobble and the button shake are incidental decoration, so those go. */
 @media (prefers-reduced-motion: reduce) {
   .pointer {
+    animation: none;
+  }
+
+  .stop-btn.is-pressed {
     animation: none;
   }
 }

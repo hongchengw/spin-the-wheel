@@ -8,6 +8,7 @@
 
 import { renderSetupPanel, readLabels, clearFields } from './form';
 import { buildWheel } from './wheel';
+import { tauntFor } from './taunts';
 
 export type AppRoot = Document | HTMLElement;
 
@@ -42,6 +43,89 @@ function buildStage(doc: Document, svg: SVGSVGElement): HTMLElement {
 
   stage.append(pointer, wheel);
   return stage;
+}
+
+/** Keep in sync with the `stop-press` duration in src/style.css. */
+const PRESS_MS = 260;
+
+/**
+ * Builds the controls block: the fake stop button and its taunt line.
+ *
+ * The taunt starts empty on purpose — a pre-filled line would give away that
+ * the messages are canned. `role="status"` plus `aria-live="polite"` means a
+ * screen reader announces each new line, which is what a sincere app would do
+ * and is therefore what this one does.
+ */
+function buildControls(doc: Document): HTMLElement {
+  const controls = doc.createElement('div');
+  controls.className = 'controls';
+
+  const button = doc.createElement('button');
+  button.type = 'button';
+  button.id = 'stop-btn';
+  button.className = 'stop-btn';
+  button.textContent = 'STOP THE WHEEL';
+
+  const taunt = doc.createElement('p');
+  taunt.id = 'taunt';
+  taunt.className = 'taunt';
+  taunt.setAttribute('role', 'status');
+  taunt.setAttribute('aria-live', 'polite');
+
+  controls.append(button, taunt);
+  return controls;
+}
+
+/**
+ * Wires the stop button to do exactly two things: update its own copy and
+ * shake itself. It never touches the wheel, never disables itself, never
+ * relabels itself and is never removed — the button has to stay credible
+ * forever, and a disabled or relabelled button admits the gag.
+ *
+ * The counter is a closure variable: no storage, no URL state, nothing that
+ * survives a reload. Reloading genuinely resets the app, and that remains the
+ * real exit at every moment.
+ *
+ * Restarting the press animation needs care. Re-adding the class in the same
+ * frame is a no-op because the style recalc coalesces the removal and the
+ * addition, so the animation never sees a change. Reading `offsetWidth`
+ * between the two forces a synchronous reflow, which commits the "no
+ * animation" state and makes the re-add a genuine restart. `animationend`
+ * then clears the class, with a timer fallback so environments that never
+ * fire animation events (jsdom, `prefers-reduced-motion`) do not wedge.
+ */
+function wireStopButton(button: HTMLButtonElement, taunt: HTMLElement): void {
+  let clicks = 0;
+  let pressTimer = 0;
+
+  const clearPress = (): void => {
+    button.classList.remove('is-pressed');
+  };
+
+  button.addEventListener('animationend', (event) => {
+    if (event.target === button && event.animationName === 'stop-press') {
+      clearPress();
+    }
+  });
+
+  button.addEventListener('click', () => {
+    clicks += 1;
+    taunt.textContent = tauntFor(clicks);
+
+    // Restart the shake from zero, even mid-animation.
+    button.classList.remove('is-pressed');
+    void button.offsetWidth; // force reflow so the re-add restarts the run
+    button.classList.add('is-pressed');
+
+    const view = button.ownerDocument.defaultView;
+    if (view) {
+      view.clearTimeout(pressTimer);
+      pressTimer = view.setTimeout(clearPress, PRESS_MS * 2);
+    }
+
+    // And that is the entire handler. The wheel is not referenced here, and
+    // must never be: no pause, no slowdown, no click-count easter egg.
+  });
 }
 
 /**
@@ -95,11 +179,17 @@ export function initApp(root: AppRoot): void {
 
     const svg = buildWheel(readLabels(form));
     const stage = buildStage(doc, svg);
-    spinPanel.replaceChildren(stage);
+    const controls = buildControls(doc);
+    spinPanel.replaceChildren(stage, controls);
     spinPanel.removeAttribute('hidden');
 
     const wheel = required<HTMLElement>(stage, '.wheel');
     handOffToConstantSpin(wheel);
+
+    wireStopButton(
+      required<HTMLButtonElement>(controls, '#stop-btn'),
+      required<HTMLElement>(controls, '#taunt'),
+    );
 
     // Removed, not hidden: the form must be unreachable by tab or devtools.
     // A reload is the only way back to setup.
