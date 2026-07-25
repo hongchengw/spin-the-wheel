@@ -14,3 +14,4 @@ When writing code, adhere to these principles:
 6. Keep core logic clean and push implementation details to the edges
 7. Maintain consistent style (indentation, naming, patterns) throughout the codebase
 8. Balance file organization with simplicity - use an appropriate number of files for the project scale
+9. Use the git-commit-formatter skill before pushing anything to origin/main
