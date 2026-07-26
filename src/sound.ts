@@ -7,10 +7,19 @@
  * project has neither.
  *
  * The tick is driven off the wheel's measured angle rather than a timer, so it
- * stays locked to what the user can see even while stage 1 is accelerating. It
- * is frame-quantised, which at up to ~13 ticks per second is inaudible as
- * jitter and always in sync — the tradeoff a scheduled-ahead timer would get
- * backwards.
+ * stays locked to what the user can see even while stage 1 is accelerating.
+ * It is frame-quantised, which is inaudible as jitter and always in sync — the
+ * tradeoff a scheduled-ahead timer would get backwards.
+ *
+ * `MAX_TICKS_PER_SEC` is not only a spin-up guard. Stage 2 sustains 8 rev/s,
+ * so slice boundaries arrive at `8 * sliceCount` per second: 16/s at the
+ * two-slice default, which passes through untouched, but 96/s at twelve
+ * slices. Above the cap the ticker stops being one-click-per-slice and
+ * *truncates* — it drops boundaries, and because the drops fall wherever the
+ * cap window happens to land, the surviving clicks are an arrhythmic rattle
+ * rather than an evenly thinned one. That is the intended behaviour at a
+ * speed nothing could click cleanly at: a rattle reads as a wheel going far
+ * too fast, which is the joke. It is not a claim of per-slice accuracy.
  */
 
 /** Peak gain of one click. Deliberately quiet; this plays forever. */

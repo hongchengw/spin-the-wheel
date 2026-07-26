@@ -1,35 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
+import { TYPED, fillOptions } from './helpers';
 
 /**
  * The animation is only real in a real browser — jsdom runs none of it. This
  * file is where "the wheel actually spins, forever, without a seam" is proven.
  */
 
-const TYPED = [
-  'Pizza',
-  'Sushi',
-  'Tacos',
-  'Ramen',
-  'Curry',
-  'Salad',
-  'Burger',
-  'Pasta',
-];
-
 /** Must stay in sync with `.wheel.is-spinning` in src/style.css. */
-const SPIN_PERIOD_S = 0.9;
-/** 360deg / 0.9s — also the terminal velocity of the spin-up easing. */
+const SPIN_PERIOD_S = 0.125;
+/** 360deg / 0.125s = 2880 — also the terminal velocity of the spin-up easing. */
 const TERMINAL_DEG_PER_S = 360 / SPIN_PERIOD_S;
 /** `.wheel.is-spinning-up` duration; the handoff happens at this mark. */
-const SPIN_UP_MS = 2000;
+const SPIN_UP_MS = 6000;
 /** Comfortably past the handoff, for tests that assert on stage 2. */
 const PAST_HANDOFF_MS = SPIN_UP_MS + 600;
 
 async function fillAndSpin(page: Page): Promise<void> {
   await page.goto('/');
-  for (let n = 1; n <= 8; n += 1) {
-    await page.fill(`#opt-${n}`, TYPED[n - 1]);
-  }
+  await fillOptions(page, TYPED);
   await page.click('#spin-btn');
 }
 
@@ -72,6 +60,10 @@ test('the animation is running, never paused', async ({ page }) => {
 test('still rotating between 3s and 8s', async ({ page }) => {
   await fillAndSpin(page);
 
+  // 3s is inside the 6s wind-up now, not past it. That still satisfies the
+  // claim — the wheel is turning at ~490deg/s there — and the point of the
+  // test is that motion spans the whole window, not that stage 2 has begun.
+  // `never settles — still moving at 10 seconds` is what covers stage 2 alone.
   await page.waitForTimeout(3000);
   const early = await wheelTransform(page);
 
@@ -79,8 +71,10 @@ test('still rotating between 3s and 8s', async ({ page }) => {
   const late = await wheelTransform(page);
 
   // A third sample offset by a non-multiple of the spin period, so that a
-  // coincidental match between the first two cannot read as "stopped".
-  await page.waitForTimeout(130);
+  // coincidental match between the first two cannot read as "stopped". The
+  // period is only 125ms now, so the offset has to stay well clear of a whole
+  // turn: 60ms is ~173deg, about as far from a repeat as the wheel gets.
+  await page.waitForTimeout(60);
   const later = await wheelTransform(page);
 
   expect(new Set([early, late, later]).size).toBeGreaterThan(1);
@@ -140,7 +134,16 @@ test('the stage-1 to stage-2 seam has no velocity lurch', async ({ page }) => {
 
     // Windowed angular velocity. Rotation is always forward, so unwrap each
     // gap into [0, 360) rather than the usual +/-180 unwrap.
-    const WINDOW = 5;
+    //
+    // That unwrap puts a hard ceiling on WINDOW: a window that spans a full
+    // turn or more aliases back down into [0, 360) and reports a velocity far
+    // *lower* than the truth, which looks exactly like the lurch this test is
+    // hunting for. At the sustained 2880deg/s the wheel covers 360deg in only
+    // 125ms, i.e. about 7.5 frames — so the ceiling is genuinely close. Two
+    // frames is ~33ms (~96deg) and stays under it even if a couple of frames
+    // inside the window are dropped. Do not raise this to buy smoothness; the
+    // 5-point median below is where smoothing belongs.
+    const WINDOW = 2;
     const velocities: number[] = [];
     for (let i = WINDOW; i < samples.length; i += WINDOW) {
       const a = samples[i - WINDOW];
@@ -193,7 +196,7 @@ test('no frame stalls when stage 2 takes over', async ({ page }) => {
   // stage 2 starting its own timeline from 0deg would repeat that frame and
   // drop a frame's worth of travel. Nothing here is smoothed: every frame must
   // move the wheel.
-  const frames = await page.evaluate(async () => {
+  const frames = await page.evaluate(async (recordMs: number) => {
     const el = document.querySelector('.wheel');
     if (!el) throw new Error('missing .wheel');
 
@@ -210,19 +213,30 @@ test('no frame stalls when stage 2 takes over', async ({ page }) => {
           a: (Math.atan2(m.b, m.a) * 180) / Math.PI,
           spinning: el.classList.contains('is-spinning'),
         });
-        if (t > 3200) resolve();
+        if (t > recordMs) resolve();
         else requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
     });
     return samples;
-  });
+  }, SPIN_UP_MS + 1200);
 
   const swap = frames.findIndex((f) => f.spinning);
   expect(swap).toBeGreaterThan(0);
 
-  // Every frame within 20 of the handoff, both stages included.
-  const from = Math.max(1, swap - 20);
+  // Every frame in a window around the handoff, both stages included — but
+  // the window is asymmetric, and that is not a fudge.
+  //
+  // Stage 2 is flat, so any number of frames after the swap can be held to the
+  // terminal velocity. Stage 1 is not: it is still accelerating hard right up
+  // to the handoff, so a frame N frames *before* the swap is legitimately
+  // slower than terminal, by a lot. At 60Hz the easing sits at ~0.91x terminal
+  // 6 frames back, ~0.86x at 10, and ~0.75x at 20 — the last of which collides
+  // with the floor asserted below and would fail for reasons that have nothing
+  // to do with a stall. Six frames keeps every sampled stage-1 frame clear of
+  // the floor while still covering the seam itself, which is the only place a
+  // repeated frame can occur (the seam gap is measured at index `swap`).
+  const from = Math.max(1, swap - 6);
   const to = Math.min(frames.length, swap + 20);
 
   const velocities: number[] = [];
@@ -236,8 +250,9 @@ test('no frame stalls when stage 2 takes over', async ({ page }) => {
   }
 
   expect(velocities.length).toBeGreaterThan(10);
-  // Stage 1 never drops below its 400deg/s terminal velocity and stage 2 holds
-  // it exactly, so no single frame anywhere near the seam may fall far short.
+  // Over the sampled window stage 1 is within ~10% of its 2880deg/s terminal
+  // velocity and stage 2 holds it exactly, so no single frame anywhere near
+  // the seam may fall far short. A repeated frame would read as ~0.
   expect(Math.min(...velocities)).toBeGreaterThan(TERMINAL_DEG_PER_S * 0.75);
 });
 

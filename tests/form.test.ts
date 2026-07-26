@@ -6,6 +6,7 @@ import {
   duplicateIndices,
   duplicateNotice,
   optionCount,
+  DEFAULT_OPTION_COUNT,
   MIN_OPTION_COUNT,
   MAX_OPTION_COUNT,
 } from '../src/form';
@@ -54,32 +55,42 @@ const TYPED = [
   'Pasta',
 ];
 
+/** `Option 1` … `Option n`, the fallback labels a blank form reads back as. */
+function defaults(n: number): string[] {
+  return Array.from({ length: n }, (_, i) => `Option ${i + 1}`);
+}
+
+/** `opt-1` … `opt-n`, in the order the rows should carry them. */
+function ids(n: number): string[] {
+  return Array.from({ length: n }, (_, i) => `opt-${i + 1}`);
+}
+
+/**
+ * Renders the panel and grows it to `count` rows. The form opens at two, so
+ * any test working with a longer list has to add the rows it needs first.
+ */
+function renderWithRows(root: HTMLElement, count: number): void {
+  renderSetupPanel(root);
+  while (optionCount(root) < count) click(addButton(root));
+}
+
 beforeEach(() => {
   host = document.createElement('div');
 });
 
 describe('renderSetupPanel', () => {
-  it('renders exactly 8 text inputs', () => {
+  it('renders exactly the default number of text inputs', () => {
     renderSetupPanel(host);
     const fields = inputs(host);
-    expect(fields).toHaveLength(8);
+    expect(fields).toHaveLength(DEFAULT_OPTION_COUNT);
     for (const field of fields) {
       expect(field.type).toBe('text');
     }
   });
 
-  it('gives the inputs ids opt-1 through opt-8 in order', () => {
+  it('gives the inputs ids opt-1 upward in order', () => {
     renderSetupPanel(host);
-    expect(inputs(host).map((f) => f.id)).toEqual([
-      'opt-1',
-      'opt-2',
-      'opt-3',
-      'opt-4',
-      'opt-5',
-      'opt-6',
-      'opt-7',
-      'opt-8',
-    ]);
+    expect(inputs(host).map((f) => f.id)).toEqual(ids(DEFAULT_OPTION_COUNT));
   });
 
   it('sets autocomplete="off" and maxlength="24" on every input', () => {
@@ -98,24 +109,17 @@ describe('renderSetupPanel', () => {
     expect(forms[0].getAttribute('autocomplete')).toBe('off');
   });
 
-  it('uses placeholders Option 1 through Option 8', () => {
+  it('uses Option N placeholders, one per row', () => {
     renderSetupPanel(host);
-    expect(inputs(host).map((f) => f.getAttribute('placeholder'))).toEqual([
-      'Option 1',
-      'Option 2',
-      'Option 3',
-      'Option 4',
-      'Option 5',
-      'Option 6',
-      'Option 7',
-      'Option 8',
-    ]);
+    expect(inputs(host).map((f) => f.getAttribute('placeholder'))).toEqual(
+      defaults(DEFAULT_OPTION_COUNT),
+    );
   });
 
   it('associates a label with each input via a matching for attribute', () => {
     renderSetupPanel(host);
     const labels = Array.from(host.querySelectorAll('label'));
-    expect(labels).toHaveLength(8);
+    expect(labels).toHaveLength(DEFAULT_OPTION_COUNT);
     for (const field of inputs(host)) {
       const label = labels.find((l) => l.getAttribute('for') === field.id);
       expect(label).toBeDefined();
@@ -132,29 +136,29 @@ describe('renderSetupPanel', () => {
     expect(button!.textContent).toBe('Spin');
   });
 
-  it('is idempotent — calling it twice still yields exactly 8 inputs', () => {
+  it('is idempotent — calling it twice still yields the default row count', () => {
     renderSetupPanel(host);
     renderSetupPanel(host);
-    expect(inputs(host)).toHaveLength(8);
+    expect(inputs(host)).toHaveLength(DEFAULT_OPTION_COUNT);
     expect(host.querySelectorAll('form')).toHaveLength(1);
   });
 });
 
 describe('readLabels', () => {
   it('returns the typed values in order', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     fill(host, TYPED);
     expect(readLabels(host)).toEqual(TYPED);
   });
 
   it('trims surrounding whitespace', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     fill(host, ['  Pizza  ', ...TYPED.slice(1)]);
     expect(readLabels(host)[0]).toBe('Pizza');
   });
 
   it('falls back to Option N for blank fields', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     const values = [...TYPED];
     values[1] = '';
     values[4] = '';
@@ -172,76 +176,64 @@ describe('readLabels', () => {
   });
 
   it('falls back to Option N for whitespace-only fields', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     const values = [...TYPED];
     values[2] = '   ';
     fill(host, values);
     expect(readLabels(host)[2]).toBe('Option 3');
   });
 
-  it('returns Option 1 through Option 8 for a fully blank form', () => {
+  it('returns an Option N per row for a fully blank form', () => {
     renderSetupPanel(host);
-    expect(readLabels(host)).toEqual([
-      'Option 1',
-      'Option 2',
-      'Option 3',
-      'Option 4',
-      'Option 5',
-      'Option 6',
-      'Option 7',
-      'Option 8',
-    ]);
+    expect(readLabels(host)).toEqual(defaults(DEFAULT_OPTION_COUNT));
   });
 
-  it('always returns exactly 8 items', () => {
+  it('always returns one item per row, typed or not', () => {
     renderSetupPanel(host);
-    expect(readLabels(host)).toHaveLength(8);
-    fill(host, TYPED);
-    expect(readLabels(host)).toHaveLength(8);
+    expect(readLabels(host)).toHaveLength(DEFAULT_OPTION_COUNT);
+    fill(host, TYPED.slice(0, DEFAULT_OPTION_COUNT));
+    expect(readLabels(host)).toHaveLength(DEFAULT_OPTION_COUNT);
   });
 });
 
 describe('clearFields', () => {
   it('empties every input', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     fill(host, TYPED);
     expect(inputs(host).every((f) => f.value !== '')).toBe(true);
     clearFields(host);
-    expect(inputs(host).map((f) => f.value)).toEqual(['', '', '', '', '', '', '', '']);
+    expect(inputs(host).map((f) => f.value)).toEqual(
+      Array.from({ length: DEFAULT_OPTION_COUNT }, () => ''),
+    );
   });
 
   it('also resets an edited row count, so a reload wipes that too', () => {
-    renderSetupPanel(host);
-    click(addButton(host));
-    click(addButton(host));
+    renderWithRows(host, 10);
     expect(optionCount(host)).toBe(10);
 
     clearFields(host);
 
-    expect(optionCount(host)).toBe(8);
+    expect(optionCount(host)).toBe(DEFAULT_OPTION_COUNT);
     expect(inputs(host).every((f) => f.value === '')).toBe(true);
   });
 });
 
 describe('adding and removing options', () => {
-  it('starts at 8 rows', () => {
+  it('starts at the default row count', () => {
     renderSetupPanel(host);
-    expect(optionCount(host)).toBe(8);
+    expect(optionCount(host)).toBe(DEFAULT_OPTION_COUNT);
   });
 
   it('appends a row, renumbering ids contiguously', () => {
     renderSetupPanel(host);
     click(addButton(host));
 
-    expect(optionCount(host)).toBe(9);
-    expect(inputs(host).map((f) => f.id)).toEqual([
-      'opt-1', 'opt-2', 'opt-3', 'opt-4', 'opt-5',
-      'opt-6', 'opt-7', 'opt-8', 'opt-9',
-    ]);
+    expect(optionCount(host)).toBe(3);
+    expect(inputs(host).map((f) => f.id)).toEqual(ids(3));
   });
 
   it('preserves what was already typed when a row is added', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     fill(host, TYPED);
     click(addButton(host));
 
@@ -249,7 +241,7 @@ describe('adding and removing options', () => {
   });
 
   it('removes the chosen row and closes the gap', () => {
-    renderSetupPanel(host);
+    renderWithRows(host, TYPED.length);
     fill(host, TYPED);
 
     click(removeButtons(host)[2]); // drop "Tacos"
@@ -258,22 +250,35 @@ describe('adding and removing options', () => {
     expect(inputs(host).map((f) => f.value)).toEqual([
       'Pizza', 'Sushi', 'Ramen', 'Curry', 'Salad', 'Burger', 'Pasta',
     ]);
-    expect(inputs(host).map((f) => f.id)).toEqual([
-      'opt-1', 'opt-2', 'opt-3', 'opt-4', 'opt-5', 'opt-6', 'opt-7',
-    ]);
+    expect(inputs(host).map((f) => f.id)).toEqual(ids(7));
   });
 
   it('stops at the 12 option ceiling and hides the add control there', () => {
     renderSetupPanel(host);
-    for (let i = 0; i < 10; i += 1) click(addButton(host));
+    // One click per possible row: the surplus must be absorbed, not stack up.
+    for (let i = 0; i < MAX_OPTION_COUNT; i += 1) click(addButton(host));
 
     expect(optionCount(host)).toBe(MAX_OPTION_COUNT);
     expect(addButton(host).hidden).toBe(true);
   });
 
-  it('stops at the 2 option floor and hides the remove controls there', () => {
+  it('hides the remove controls on a fresh form, which opens at the floor', () => {
     renderSetupPanel(host);
-    for (let i = 0; i < 10; i += 1) {
+
+    expect(optionCount(host)).toBe(MIN_OPTION_COUNT);
+    expect(removeButtons(host).every((b) => b.hidden)).toBe(true);
+  });
+
+  it('offers remove again as soon as a row is added', () => {
+    renderSetupPanel(host);
+    click(addButton(host));
+
+    expect(removeButtons(host).every((b) => !b.hidden)).toBe(true);
+  });
+
+  it('stops at the 2 option floor and hides the remove controls there', () => {
+    renderWithRows(host, MAX_OPTION_COUNT);
+    for (let i = 0; i < MAX_OPTION_COUNT; i += 1) {
       const buttons = removeButtons(host).filter((b) => !b.hidden);
       if (buttons.length === 0) break;
       click(buttons[0]);
@@ -289,15 +294,15 @@ describe('adding and removing options', () => {
     click(addButton(host));
 
     const labels = readLabels(host);
-    expect(labels).toHaveLength(10);
-    expect(labels[9]).toBe('Option 10');
+    expect(labels).toHaveLength(4);
+    expect(labels[3]).toBe('Option 4');
   });
 
   it('reports the count to the user', () => {
     renderSetupPanel(host);
-    expect(host.querySelector('#option-count')?.textContent).toBe('8 of 12 options');
+    expect(host.querySelector('#option-count')?.textContent).toBe('2 of 12 options');
     click(addButton(host));
-    expect(host.querySelector('#option-count')?.textContent).toBe('9 of 12 options');
+    expect(host.querySelector('#option-count')?.textContent).toBe('3 of 12 options');
   });
 });
 
@@ -345,7 +350,8 @@ describe('duplicateNotice', () => {
 
 describe('duplicate marking in the DOM', () => {
   it('marks matching inputs and writes the notice as the user types', () => {
-    renderSetupPanel(host);
+    // Three rows, so an untouched third field can stand as the control.
+    renderWithRows(host, 3);
     const fields = inputs(host);
 
     setValue(fields[0], 'Pizza');

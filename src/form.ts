@@ -1,5 +1,5 @@
 /**
- * The setup form: the eight-ish text fields the user pours effort into.
+ * The setup form: the text fields the user pours effort into.
  *
  * Everything here is driven off the DOM rather than a parallel state object.
  * The rows *are* the state, so there is nothing to keep in sync and nothing
@@ -8,7 +8,7 @@
 
 import { MIN_SLICES, MAX_SLICES, sliceToken } from './wheel';
 
-export const DEFAULT_OPTION_COUNT = 8;
+export const DEFAULT_OPTION_COUNT = 2;
 export const MIN_OPTION_COUNT = MIN_SLICES;
 export const MAX_OPTION_COUNT = MAX_SLICES;
 
@@ -38,7 +38,7 @@ export function optionCount(root: ParentNode): number {
 /**
  * Indices of every value that appears more than once, compared trimmed and
  * case-insensitively. Blanks are exempt: they are not duplicates of each
- * other, they are eight separate unfilled fields.
+ * other, they are separate unfilled fields.
  *
  * Pure, so the rule is testable without a DOM.
  */

@@ -1,21 +1,9 @@
 import { test, expect } from '@playwright/test';
-
-const TYPED = [
-  'Pizza',
-  'Sushi',
-  'Tacos',
-  'Ramen',
-  'Curry',
-  'Salad',
-  'Burger',
-  'Pasta',
-];
+import { TYPED, fillOptions } from './helpers';
 
 async function fillAndSpin(page: import('@playwright/test').Page) {
   await page.goto('/');
-  for (let n = 1; n <= 8; n += 1) {
-    await page.fill(`#opt-${n}`, TYPED[n - 1]);
-  }
+  await fillOptions(page, TYPED);
   await page.click('#spin-btn');
 }
 

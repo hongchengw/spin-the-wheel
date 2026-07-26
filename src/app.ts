@@ -81,8 +81,27 @@ function buildStage(doc: Document, svg: SVGSVGElement): HTMLElement {
 const PRESS_MS = 260;
 
 /**
- * Builds the controls block: the mute toggle, the fake stop button and its
- * taunt line.
+ * Builds the mute toggle.
+ *
+ * It is mounted on its own, anchored to a corner of the viewport rather than
+ * stacked into the controls column, for two reasons: at a touch-target size it
+ * is too big to read as a footnote to the stop button, and the row it used to
+ * occupy is squarely inside the region the stop button dodges through — the
+ * one control that works must not be catchable by the one that refuses to be.
+ */
+function buildMuteButton(doc: Document): HTMLButtonElement {
+  const mute = doc.createElement('button');
+  mute.type = 'button';
+  mute.id = 'mute-btn';
+  mute.className = 'icon-btn mute-btn';
+  mute.setAttribute('aria-pressed', 'false');
+  mute.setAttribute('aria-label', 'Mute the wheel');
+  mute.appendChild(icon(doc, SPEAKER_BODY, SPEAKER_WAVES));
+  return mute;
+}
+
+/**
+ * Builds the controls block: the fake stop button and its taunt line.
  *
  * The stop button is wrapped in its own slot because two separate things want
  * to transform it — the dodge offset and the press shake — and an animation
@@ -98,18 +117,6 @@ const PRESS_MS = 260;
 function buildControls(doc: Document): HTMLElement {
   const controls = doc.createElement('div');
   controls.className = 'controls';
-
-  const mute = doc.createElement('button');
-  mute.type = 'button';
-  mute.id = 'mute-btn';
-  mute.className = 'icon-btn';
-  mute.setAttribute('aria-pressed', 'false');
-  mute.setAttribute('aria-label', 'Mute the wheel');
-  mute.appendChild(icon(doc, SPEAKER_BODY, SPEAKER_WAVES));
-
-  const utility = doc.createElement('div');
-  utility.className = 'controls__utility';
-  utility.appendChild(mute);
 
   const slot = doc.createElement('div');
   slot.className = 'stop-slot';
@@ -127,7 +134,7 @@ function buildControls(doc: Document): HTMLElement {
   taunt.setAttribute('role', 'status');
   taunt.setAttribute('aria-live', 'polite');
 
-  controls.append(utility, slot, taunt);
+  controls.append(slot, taunt);
   return controls;
 }
 
@@ -216,7 +223,7 @@ function wireDodgingButton(slot: HTMLElement, button: HTMLButtonElement): void {
       let awayX = left + base.width / 2 - event.clientX;
       let awayY = top + base.height / 2 - event.clientY;
 
-      // A 420px-wide button approached from directly below has an away-vector
+      // A wide button approached from directly below has an away-vector
       // that is almost purely vertical, so it would only ever bounce up and
       // down the page. Below a fifth of its half-width the horizontal
       // component is treated as no preference at all, and it breaks the tie by
@@ -336,20 +343,26 @@ function animationEndTime(wheel: HTMLElement): number | null {
 }
 
 /**
- * Hands stage 1 (`spin-up`, a finite 2-turn accelerating run) over to stage 2
+ * Hands stage 1 (`spin-up`, a finite 12-turn accelerating run) over to stage 2
  * (`spin`, constant rate, infinite) the instant the first animation ends.
  *
  * Both keyframes start and end on whole multiples of 360deg and stage 2 runs
  * at the terminal velocity of the stage-1 easing, so the swap is invisible.
  *
  * Backdating stage 2 is what makes it invisible in practice. Stage 1 lands on
- * 720deg on a frame boundary, but `animationend` is only delivered on the next
- * tick, and stage 2 would otherwise begin its own timeline from zero at that
- * point. Since 720deg and 0deg are the same angle, the wheel then renders the
- * identical frame twice and drops ~6.7deg of travel — a single-frame hitch at
- * the exact moment the handoff has to be seamless. Anchoring stage 2's
- * `startTime` to when stage 1 actually ended absorbs the delay instead, and
- * self-corrects if the tick is delayed by more than one frame.
+ * 4320deg on a frame boundary, but `animationend` is only delivered on the
+ * next tick, and stage 2 would otherwise begin its own timeline from zero at
+ * that point. Since 4320deg and 0deg are the same angle, the wheel then
+ * renders the identical frame twice and drops ~48deg of travel — a
+ * single-frame hitch at the exact moment the handoff has to be seamless. At
+ * the sustained 2880deg/s that hitch is larger and more visible than it was at
+ * the previous, slower cruise, so this matters more, not less. Anchoring
+ * stage 2's `startTime` to when stage 1 actually ended absorbs the delay
+ * instead, and self-corrects if the tick is delayed by more than one frame.
+ *
+ * None of the code below hardcodes a duration: the end time is read off the
+ * animation's own computed timing, so retiming either stage in CSS needs no
+ * change here.
  *
  * The swap is one-way and one-shot: the listener detaches itself, so a second
  * `animationend` (or any later event) cannot toggle back or stack classes.
@@ -465,7 +478,8 @@ export function initApp(root: AppRoot): void {
     const svg = buildWheel(labels);
     const stage = buildStage(doc, svg);
     const controls = buildControls(doc);
-    spinPanel.replaceChildren(stage, controls);
+    const muteButton = buildMuteButton(doc);
+    spinPanel.replaceChildren(muteButton, stage, controls);
     spinPanel.removeAttribute('hidden');
 
     const wheel = required<HTMLElement>(stage, '.wheel');
@@ -479,7 +493,6 @@ export function initApp(root: AppRoot): void {
     // blocked by autoplay policy, and this submit is the user gesture.
     const view = doc.defaultView;
     const ticker = createTicker(view ?? (globalThis as unknown as Window));
-    const muteButton = required<HTMLButtonElement>(controls, '#mute-btn');
     wireMuteButton(muteButton, ticker);
     muteButton.hidden = !ticker.isAvailable();
 

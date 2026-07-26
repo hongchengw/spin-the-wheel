@@ -12,16 +12,9 @@ const APP_HTML = `
   </main>
 `;
 
-const TYPED = [
-  'Pizza',
-  'Sushi',
-  'Tacos',
-  'Ramen',
-  'Curry',
-  'Salad',
-  'Burger',
-  'Pasta',
-];
+// One word per row the form opens with. `fill` writes into the rows that are
+// already there, so this list has to match the default count exactly.
+const TYPED = ['Pizza', 'Sushi'];
 
 let root: HTMLElement;
 
@@ -55,10 +48,10 @@ beforeEach(() => {
 });
 
 describe('before submit', () => {
-  it('shows the setup panel with 8 inputs, keeps the spin panel hidden, and body is in the setup phase', () => {
+  it('shows the setup panel with 2 inputs, keeps the spin panel hidden, and body is in the setup phase', () => {
     const setupPanel = root.querySelector('#setup-panel');
     expect(setupPanel).not.toBeNull();
-    expect(setupPanel!.querySelectorAll('input')).toHaveLength(8);
+    expect(setupPanel!.querySelectorAll('input')).toHaveLength(2);
 
     const spinPanel = root.querySelector('#spin-panel');
     expect(spinPanel).not.toBeNull();
@@ -128,10 +121,10 @@ describe('after submit', () => {
 
   it('carries blank fields onto the wheel as Option N fallbacks', () => {
     const values = [...TYPED];
-    values[3] = '';
+    values[1] = '';
     fill(values);
     submit();
-    expect(wheelTexts()[3]).toBe('Option 4');
+    expect(wheelTexts()[1]).toBe('Option 2');
   });
 
   it('prevents the default submit so the page never navigates', () => {

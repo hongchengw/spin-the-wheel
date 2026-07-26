@@ -1,31 +1,19 @@
 import { test, expect, type Page } from '@playwright/test';
+import { TYPED, fillOptions } from './helpers';
 
 /**
  * The stop button is the joke. These tests prove it stays a joke: it reacts
  * convincingly to every click and does precisely nothing to the wheel.
  */
 
-const TYPED = [
-  'Pizza',
-  'Sushi',
-  'Tacos',
-  'Ramen',
-  'Curry',
-  'Salad',
-  'Burger',
-  'Pasta',
-];
-
 /** `.wheel.is-spinning-up` duration; the handoff happens at this mark. */
-const SPIN_UP_MS = 2000;
+const SPIN_UP_MS = 6000;
 /** Comfortably past the handoff, matching e2e/spin.spec.ts. */
 const PAST_HANDOFF_MS = SPIN_UP_MS + 600;
 
 async function fillAndSpin(page: Page): Promise<void> {
   await page.goto('/');
-  for (let n = 1; n <= 8; n += 1) {
-    await page.fill(`#opt-${n}`, TYPED[n - 1]);
-  }
+  await fillOptions(page, TYPED);
   await page.click('#spin-btn');
 }
 

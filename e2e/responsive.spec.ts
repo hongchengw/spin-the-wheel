@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { TYPED, fillOptions } from './helpers';
 
 /**
  * Layout is only observable in a real browser, so every assertion here is a
@@ -13,24 +14,11 @@ import { test, expect, type Page } from '@playwright/test';
 const MOBILE = { width: 375, height: 667 };
 const DESKTOP = { width: 1280, height: 800 };
 
-const TYPED = [
-  'Pizza',
-  'Sushi',
-  'Tacos',
-  'Ramen',
-  'Curry',
-  'Salad',
-  'Burger',
-  'Pasta',
-];
-
-/** `.wheel.is-spinning-up` lasts 2s; wait past the handoff, as spin.spec does. */
-const PAST_HANDOFF_MS = 2600;
+/** `.wheel.is-spinning-up` lasts 6s; wait past the handoff, as spin.spec does. */
+const PAST_HANDOFF_MS = 6600;
 
 async function fillAndSpin(page: Page): Promise<void> {
-  for (let n = 1; n <= 8; n += 1) {
-    await page.fill(`#opt-${n}`, TYPED[n - 1]);
-  }
+  await fillOptions(page, TYPED);
   await page.click('#spin-btn');
   await expect(page.locator('#wheel svg')).toBeVisible();
   // Measure the settled layout, after the spin-up/constant-spin handoff.
