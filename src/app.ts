@@ -472,10 +472,18 @@ export function initApp(root: AppRoot): void {
     // beforeunload, no history games; browser back/reload stay untouched.
     event.preventDefault();
     if (spinning) return;
-    spinning = true;
 
+    // Built before the latch is set, not after. `buildWheel` throws outside its
+    // 2-12 slice range, and a latch set first would survive that throw: the
+    // wheel would never mount, the form would never be removed, and every later
+    // submit would short-circuit on `spinning` — a dead app with no way back
+    // but a reload. Committing the latch only once the work that can fail has
+    // succeeded keeps a failed spin retryable.
     const labels = readLabels(form);
     const svg = buildWheel(labels);
+
+    spinning = true;
+
     const stage = buildStage(doc, svg);
     const controls = buildControls(doc);
     const muteButton = buildMuteButton(doc);
