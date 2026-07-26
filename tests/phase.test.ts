@@ -7,8 +7,8 @@ const APP_HTML = `
       <h1 class="title">Infinite Spin Trap</h1>
       <p class="subtitle">Enter your options. Let the wheel decide.</p>
     </header>
-    <section id="setup-panel" class="panel"></section>
-    <section id="spin-panel" class="panel" hidden></section>
+    <section id="setup-panel"></section>
+    <section id="spin-panel" hidden></section>
   </main>
 `;
 

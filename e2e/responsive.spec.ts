@@ -136,20 +136,42 @@ test('the wheel is rendered and not clipped horizontally at 375x667', async ({
   await page.goto('/');
   await fillAndSpin(page);
 
-  const box = await page.locator('#wheel').boundingBox();
-  expect(box).not.toBeNull();
-  if (!box) return;
+  // Measured from the layout box and the known art ratio, not from a client
+  // rect. The wheel is mid-rotation, so a client rect reports the *swept*
+  // bounding box — a square's diagonal, ~41% wider than the wheel itself. Those
+  // swept corners are empty and are deliberately clipped away by .stage__clip,
+  // so asserting on them would be asserting on nothing that is ever drawn.
+  const art = await page.evaluate(() => {
+    const wheel = document.querySelector<HTMLElement>('#wheel');
+    if (!wheel) return null;
+    const layout = wheel.offsetWidth;
+    // Only the inscribed circle is painted: rim r=181 of a 400 viewBox.
+    const diameter = layout * 0.905;
+    const centre = wheel.getBoundingClientRect();
+    return {
+      layout,
+      diameter,
+      left: centre.left + centre.width / 2 - diameter / 2,
+      top: centre.top + centre.height / 2 - diameter / 2,
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    };
+  });
+  expect(art).not.toBeNull();
+  if (!art) return;
 
-  expect(box.width).toBeGreaterThan(0);
-  expect(box.height).toBeGreaterThan(0);
   // Guards the cheap fix: shrinking the wheel until nothing can overflow.
   // It has to stay the hero of the screen, not a coin.
-  expect(box.width).toBeGreaterThan(MOBILE.width * 0.55);
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(MOBILE.width + 1);
-  // Visible at once, along with the controls.
-  expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.y + box.height).toBeLessThanOrEqual(MOBILE.height + 1);
+  expect(art.layout).toBeGreaterThan(MOBILE.width * 0.55);
+
+  // Nothing painted may leave the viewport, in either axis...
+  expect(art.left).toBeGreaterThanOrEqual(0);
+  expect(art.left + art.diameter).toBeLessThanOrEqual(MOBILE.width + 1);
+  expect(art.top).toBeGreaterThanOrEqual(0);
+  expect(art.top + art.diameter).toBeLessThanOrEqual(MOBILE.height + 1);
+
+  // ...and the clipped corners must not have widened the document either.
+  expect(art.scrollWidth).toBeLessThanOrEqual(art.clientWidth);
 });
 
 test('inputs are a single column below 560px', async ({ page }) => {

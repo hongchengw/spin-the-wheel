@@ -62,7 +62,7 @@ The app has exactly two phases, tracked by a class on `<body>`.
 | Phase | Body class | Contents |
 |---|---|---|
 | Setup | `setup` | Eyebrow, title, subtitle, variable option list (2–12 rows), duplicate notice, **Spin** button |
-| Spinning | `spinning` | Shrunk title, pointer, spinning wheel, **instrument panel** (rate / elapsed / confidence / countdown, mute), **STOP THE WHEEL** button, taunt line |
+| Spinning | `spinning` | Shrunk title, pointer, spinning wheel, mute toggle, **STOP THE WHEEL** button, taunt line |
 
 The transition `setup → spinning` fires once, on **Spin**, and is **one-way**. There is no reverse transition.
 
@@ -186,7 +186,7 @@ The tick period is `0.45s`. On an eight-slice wheel at a `0.9s` spin period, one
 
 ### 5.4 Reduced motion
 
-`prefers-reduced-motion` is **intentionally not honored for the wheel**. The spin is the app's entire function; a static wheel would be a blank screen with no explanation. It **is** honored for every incidental motion: the pointer tick, the stop-button press animation, the confidence-bar transition, and the input and button transitions.
+`prefers-reduced-motion` is **intentionally not honored for the wheel**. The spin is the app's entire function; a static wheel would be a blank screen with no explanation. It **is** honored for every incidental motion: the pointer tick, the stop-button press animation, the dodge glide, and the input and button transitions. Note the dodge itself still happens — only the glide is dropped — because it is a behaviour rather than decoration.
 
 ---
 
@@ -220,24 +220,30 @@ Two defenses, both required:
 
 Neither alone is reliable across browsers.
 
-### 6.4 Instrument panel and sound
-
-After spin, a **`.instrument`** panel shows:
-
-| Readout | Behaviour |
-|---|---|
-| **Rate** | Revolutions per minute, derived from measured wheel rotation (~400°/s sustained → ~66.7 rpm) |
-| **Elapsed** | `M:SS` since spin began |
-| **Confidence** | Fake percentage climbing toward 99% on a repeating curve, with a bar that never completes |
-| **Countdown** | `Result in 3` → `2` → `1` → `Finalising result` → repeats forever |
+### 6.4 Sound
 
 **Mute** toggles a Web Audio synthesised tick on slice passage. Created only inside the Spin submit handler (autoplay policy). No audio files, no runtime npm dependency. If Web Audio is unavailable, the mute control is hidden and ticking is a no-op.
 
-The stop button must **never** update any instrument readout.
+It is the **only control in the spinning phase that does what it says**, which is its own joke. It sits as a small utility button above the stop button, not as a peer of it.
+
+There is deliberately **no readout panel** — no rate, elapsed, confidence or countdown. An earlier revision had one; it competed with the wheel for attention and shrank it. The wheel is the whole screen.
 
 ### 6.5 Fake stop button
 
 Label: **STOP THE WHEEL**. Clicking it updates a taunt line and plays a brief press/shake animation on the button, so it feels genuinely wired up. It never touches the wheel.
+
+**It also flees the cursor.** On a mouse pointer within **110px** of the button's edge, it hops **132px** directly away, gliding over 240ms.
+
+Constraints on the dodge:
+
+- **Clamped to the viewport**, keeping a 12px margin. It must never leave the screen and must never lengthen the document into a scrollbar.
+- **Catchable.** Because the offset is clamped, a button driven into a corner has nowhere left to go and can be clicked. That is intended: the taunts are the reward for cornering it, and an uncatchable button is a dead end rather than a joke.
+- **Mouse only** (`pointerType === 'mouse'`). Coarse pointers do not hover, so on a phone the only pointer events arrive mid-tap; dodging then reads as a broken button. Keyboard access via Tab and Enter is untouched.
+- Honored under `prefers-reduced-motion` as a **behaviour**, not decoration: it still dodges, but cuts to the new position instead of gliding.
+- The offset lives on a wrapping **`.stop-slot`**, never on the button itself, because the press shake animates the same property and an animation beats an inline style — a shake would otherwise snap the button back to its undodged position mid-flight.
+- The slot is **transformed, never repositioned**, so it keeps its place in layout and a fleeing button never reflows the taunt beneath it.
+
+The rest position must be **cached**, not re-measured per event. The slot glides for 240ms, so a live client rect read during the glide reports a partial position; deriving the untransformed origin from it yields a stale value and the clamp lets the button walk off the screen.
 
 Taunt sequence, by click count (1-based):
 
@@ -258,16 +264,17 @@ Click 6 and every click after it — 7, 50, 1000 — returns `No.` This is imple
 
 | Element | Text |
 |---|---|
-| Page title / `<h1>` | `Infinite Spin Trap` |
+| `<title>` and `<h1>` | `Normal Spin The Wheel` |
 | Eyebrow (setup) | `Decision tool` |
 | Subtitle (setup) | `Enter your options. Let the wheel decide.` |
 | Spin button | `Spin` |
 | Add option | `Add option` |
 | Stop button | `STOP THE WHEEL` |
 | Taunt line (initial) | *(empty)* |
-| Countdown (examples) | `Result in 3`, `Result in 2`, `Result in 1`, `Finalising result` |
 
 The subtitle is played completely straight. No winking.
+
+The `<title>` and the `<h1>` must **match, and both must be innocuous**. "Infinite Spin Trap" is the name of the project, never a string the user sees: the tab title is on screen before the first option is typed, and it also lands in bookmarks and history.
 
 ---
 
@@ -278,9 +285,20 @@ The subtitle is played completely straight. No winking.
 | ≥ 560px | Inputs in a 2-column grid |
 | < 560px | Inputs in a single column |
 
-The wheel is sized `min(100% / 1.43, 62vh, 440px)` with `aspect-ratio: 1`, against a full-bleed stage that cancels the app's horizontal padding.
+The wheel is sized `min(100%, 64vh, 560px)` with `aspect-ratio: 1`, against a full-bleed stage that cancels the app's horizontal padding. It is a percentage rather than `vw` so the sizing never counts a scrollbar. In practice `64vh` binds on a desktop window and `100%` binds on a phone.
 
-The `/ 1.43` is the load-bearing part. A square rotating about its centre sweeps a circle of `side × √2`, so a wheel sized to fit statically still pushes its corners past the viewport as it turns. Sizing it naively at `min(88vw, 420px)` gave a 330px wheel at 375px wide and a 418px-wide document whenever a corner faced the edge. The wheel is therefore sized from its **swept** footprint, not from its box; 1.43 is √2 plus a little slack for sub-pixel rounding. `62vh` then caps it on landscape phones and `440px` on wide desktops. It is a percentage rather than `vw` so the sizing never counts a scrollbar.
+A square rotating about its centre sweeps a circle of `side × √2`, so a wheel sized to fit statically still pushes its corners past the viewport as it turns — sizing it naively at `min(88vw, 420px)` gave a 418px-wide document at 375px wide whenever a corner faced the edge.
+
+The fix is to **clip the swept corners**, not to shrink the wheel. `.stage__clip` wraps the wheel with `overflow: clip`, which suppresses the overflow without creating a scroll container. This costs nothing visible: the artwork is a circle inscribed in the box (rim `r=181` of a `400` viewBox, so 90.5% of the box) and the four corners it sweeps through are empty.
+
+An earlier revision instead divided the size by √2, which surrendered ~30% of the available width to reserve room for those empty corners. Clipping recovers it — the wheel went from 416px to 512px on a 1280×800 desktop and from 262px to 375px at 375×667.
+
+Two things this depends on:
+
+- **The pointer must stay outside `.stage__clip`.** It overhangs the top edge on purpose and would otherwise be beheaded.
+- **`.stage__clip` must not use `align-items: stretch`** (the flex default) and `.wheel` must be `flex: none`. The wheel is square by `aspect-ratio`, so a stretched cross-axis height feeds straight back into its width and it blows past the `--wheel-w` cap entirely.
+
+When measuring the wheel, use `offsetWidth`. It is mid-rotation, so `getBoundingClientRect()` reports the **swept** bounding box — up to 41% wider than the wheel — which is exactly the region being clipped away.
 
 `overflow-x: hidden` is not an acceptable substitute for any of this. It hides the symptom and leaves the over-wide element in place.
 
@@ -296,10 +314,11 @@ No runtime dependencies. Vite + vanilla TypeScript, strict mode.
 |---|---|
 | `index.html` | App shell and mount points |
 | `src/main.ts` | Entry point — calls `initApp(document)`, nothing else |
-| `src/app.ts` | State, wiring, phase switch, spin handoff, stop-button handler |
+| `src/app.ts` | State, wiring, phase switch, spin handoff, stop-button handler and dodge |
 | `src/form.ts` | `renderSetupPanel(host)`, `readLabels(root)`, `clearFields(root)` — input generation, blank fallback, reload wipe |
 | `src/wheel.ts` | `buildWheel(labels: string[]): SVGSVGElement` — pure geometry, no app state |
 | `src/taunts.ts` | `tauntFor(clickCount: number): string` — pure |
+| `src/sound.ts` | `createTicker(view)` — synthesised Web Audio tick, mute, no-op fallback |
 | `src/style.css` | Layout, theme, palette, keyframes |
 
 `wheel.ts` and `taunts.ts` are pure and side-effect free, and `form.ts` is isolated from app state — that is what makes geometry, taunts, and form behavior testable without a browser. `initApp` takes the root it operates on rather than reaching for `document`, so the phase switch can be driven against a synthetic container in jsdom.

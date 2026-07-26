@@ -136,3 +136,93 @@ test('the taunt text is visible and escalates to No.', async ({ page }) => {
   await expect(button).toBeEnabled();
   await expect(button).toHaveText('STOP THE WHEEL');
 });
+
+/** Centre of the button right now, in viewport coordinates. */
+function buttonCentre(page: Page): Promise<{ x: number; y: number }> {
+  return page.evaluate(() => {
+    const el = document.querySelector('#stop-btn');
+    if (!el) throw new Error('missing #stop-btn');
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+}
+
+test('the stop button dodges the cursor', async ({ page }) => {
+  await fillAndSpin(page);
+  await page.waitForTimeout(PAST_HANDOFF_MS);
+
+  const before = await buttonCentre(page);
+  await page.mouse.move(before.x, before.y, { steps: 10 });
+  await page.waitForTimeout(400); // let the glide settle
+
+  const after = await buttonCentre(page);
+  expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(20);
+});
+
+/**
+ * The dodge's one hard constraint. An earlier version measured the button's
+ * live client rect to work out where it would sit untransformed, but that rect
+ * lags during the 240ms glide, so the clamp was computed against a stale origin
+ * and the button walked straight off the bottom of the window — taking the
+ * taunt with it and growing a scrollbar on the way.
+ */
+test('the dodging button stays on screen and never grows the page', async ({
+  page,
+}) => {
+  await fillAndSpin(page);
+  await page.waitForTimeout(PAST_HANDOFF_MS);
+
+  for (let i = 0; i < 10; i += 1) {
+    const centre = await buttonCentre(page);
+    await page.mouse.move(centre.x, centre.y, { steps: 6 });
+    await page.waitForTimeout(320);
+
+    const state = await page.evaluate(() => {
+      const el = document.querySelector('#stop-btn');
+      if (!el) throw new Error('missing #stop-btn');
+      const r = el.getBoundingClientRect();
+      const doc = document.documentElement;
+      return {
+        left: r.left,
+        top: r.top,
+        right: r.right,
+        bottom: r.bottom,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+        scrollWidth: doc.scrollWidth,
+        clientWidth: doc.clientWidth,
+        scrollHeight: doc.scrollHeight,
+        clientHeight: doc.clientHeight,
+      };
+    });
+
+    expect(state.left).toBeGreaterThanOrEqual(0);
+    expect(state.top).toBeGreaterThanOrEqual(0);
+    expect(state.right).toBeLessThanOrEqual(state.vw);
+    expect(state.bottom).toBeLessThanOrEqual(state.vh);
+    expect(state.scrollWidth).toBeLessThanOrEqual(state.clientWidth);
+    expect(state.scrollHeight).toBeLessThanOrEqual(state.clientHeight);
+  }
+});
+
+test('a dodging button is still catchable, and still does nothing', async ({
+  page,
+}) => {
+  await fillAndSpin(page);
+  await page.waitForTimeout(PAST_HANDOFF_MS);
+
+  // Chase it into whatever corner it ends up in.
+  for (let i = 0; i < 6; i += 1) {
+    const centre = await buttonCentre(page);
+    await page.mouse.move(centre.x, centre.y, { steps: 6 });
+    await page.waitForTimeout(300);
+  }
+
+  const before = await wheelTransform(page);
+  await page.click('#stop-btn');
+
+  // Cornered, clicked, and as useless as ever.
+  await expect(page.locator('#taunt')).toHaveText('Slowing down…');
+  await page.waitForTimeout(200);
+  expect(await wheelTransform(page)).not.toBe(before);
+});

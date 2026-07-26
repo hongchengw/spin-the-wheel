@@ -33,7 +33,8 @@ tsconfig.json       strict: true; includes src, tests, e2e
 vite.config.ts      Vite + Vitest (environment: 'jsdom')
 playwright.config.ts   projects: 'chromium' (desktop) and 'mobile' (375x667)
 index.html          app shell
-src/main.ts         wiring, phase switch, spin handoff, stop-button handler
+src/main.ts         entry point — calls initApp(document)
+src/app.ts          wiring, phase switch, spin handoff, stop-button handler
 src/form.ts         renderSetupPanel / readLabels / clearFields
 src/wheel.ts        buildWheel(labels): SVGSVGElement
 src/taunts.ts       tauntFor(clickCount): string
@@ -61,7 +62,7 @@ Work through every item. For each, report **pass or fail with the evidence** —
 ### Manual — behavior
 
 9. **Eight distinct options** render on the correct slices, all text inside the rim.
-10. **Spin-up looks real.** It accelerates smoothly from rest with **no perceptible lurch or stutter at the ~1.5 second mark**, where the animation hands off from its accelerating stage to its constant-rate stage. Watch this transition several times. This is the single moment most likely to give the gag away — report honestly what you see.
+10. **Spin-up looks real.** It accelerates smoothly from rest with **no perceptible lurch or stutter at the 2.0 second mark**, where the animation hands off from its accelerating stage to its constant-rate stage. Watch this transition several times. This is the single moment most likely to give the gag away — report honestly what you see.
 11. **Still spinning after several minutes** at a constant rate — no drift, no slowdown, no restart. Leave it running at least 3 minutes and check back.
 12. **A 24-character option truncates** cleanly with an ellipsis rather than spilling off the wheel. (24 is the input `maxlength`.)
 13. **Blank fields** render as `Option 1` … `Option 8`. Try a fully blank form too.

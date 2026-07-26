@@ -184,6 +184,63 @@ test('the stage-1 to stage-2 seam has no velocity lurch', async ({ page }) => {
   expect(result.worstDrop).toBeLessThan(TERMINAL_DEG_PER_S * 0.15);
 });
 
+test('no frame stalls when stage 2 takes over', async ({ page }) => {
+  await fillAndSpin(page);
+
+  // The seam test above smooths its samples, which is what makes it robust to
+  // timing jitter — and also what lets a one-frame stall through. Stage 1
+  // finishes on 720deg but `animationend` only arrives on the next tick, so
+  // stage 2 starting its own timeline from 0deg would repeat that frame and
+  // drop a frame's worth of travel. Nothing here is smoothed: every frame must
+  // move the wheel.
+  const frames = await page.evaluate(async () => {
+    const el = document.querySelector('.wheel');
+    if (!el) throw new Error('missing .wheel');
+
+    const samples: { t: number; a: number; spinning: boolean }[] = [];
+    // The document timeline is the clock the animation is sampled against;
+    // performance.now() is a different clock and adds phase noise.
+    const start = Number(document.timeline.currentTime);
+    await new Promise<void>((resolve) => {
+      const step = () => {
+        const t = Number(document.timeline.currentTime) - start;
+        const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+        samples.push({
+          t,
+          a: (Math.atan2(m.b, m.a) * 180) / Math.PI,
+          spinning: el.classList.contains('is-spinning'),
+        });
+        if (t > 3200) resolve();
+        else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    return samples;
+  });
+
+  const swap = frames.findIndex((f) => f.spinning);
+  expect(swap).toBeGreaterThan(0);
+
+  // Every frame within 20 of the handoff, both stages included.
+  const from = Math.max(1, swap - 20);
+  const to = Math.min(frames.length, swap + 20);
+
+  const velocities: number[] = [];
+  for (let i = from; i < to; i += 1) {
+    const dt = frames[i].t - frames[i - 1].t;
+    // Skip genuinely dropped frames; a stall keeps a normal dt but no travel.
+    if (dt < 8 || dt > 25) continue;
+    let advanced = (frames[i].a - frames[i - 1].a) % 360;
+    if (advanced < 0) advanced += 360;
+    velocities.push((advanced / dt) * 1000);
+  }
+
+  expect(velocities.length).toBeGreaterThan(10);
+  // Stage 1 never drops below its 400deg/s terminal velocity and stage 2 holds
+  // it exactly, so no single frame anywhere near the seam may fall far short.
+  expect(Math.min(...velocities)).toBeGreaterThan(TERMINAL_DEG_PER_S * 0.75);
+});
+
 test('no dialog blocks navigation away from the spinning wheel', async ({
   page,
 }) => {
