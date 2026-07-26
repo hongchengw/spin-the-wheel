@@ -1,6 +1,6 @@
 # Very Normal Spin The Wheel
 
-A very normal prize wheel. Enter up to 8 options and start spinning the wheel!
+A very normal prize wheel. Enter up to 12 options and start spinning the wheel!
 
 ## Setup
 
