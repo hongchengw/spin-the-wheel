@@ -10,6 +10,7 @@ import {
   MIN_OPTION_COUNT,
   MAX_OPTION_COUNT,
 } from '../src/form';
+import { MAX_LABEL_CHARS } from '../src/wheel';
 
 function addButton(root: ParentNode): HTMLButtonElement {
   const button = root.querySelector<HTMLButtonElement>('#add-option');
@@ -193,6 +194,38 @@ describe('readLabels', () => {
     expect(readLabels(host)).toHaveLength(DEFAULT_OPTION_COUNT);
     fill(host, TYPED.slice(0, DEFAULT_OPTION_COUNT));
     expect(readLabels(host)).toHaveLength(DEFAULT_OPTION_COUNT);
+  });
+
+  /**
+   * `maxlength` is the visible cap, but it only governs typing and pasting.
+   * Anything writing `value` directly — devtools, an extension, an autofill
+   * path — sails past it, and every consumer downstream is sized by the string
+   * it gets handed. The cap has to hold in code too.
+   */
+  describe('length cap', () => {
+    it('caps a value written past the maxlength attribute', () => {
+      renderSetupPanel(host);
+      inputs(host)[0].value = 'x'.repeat(5000);
+      expect(readLabels(host)[0]).toHaveLength(MAX_LABEL_CHARS);
+    });
+
+    it('leaves a value inside the cap untouched', () => {
+      renderSetupPanel(host);
+      const exact = 'y'.repeat(MAX_LABEL_CHARS);
+      inputs(host)[0].value = exact;
+      expect(readLabels(host)[0]).toBe(exact);
+    });
+
+    it('counts code points, so a cut never splits an emoji', () => {
+      renderSetupPanel(host);
+      // Each of these is a surrogate pair: a UTF-16 slice at the cap would
+      // halve one and leave an unpaired code unit behind.
+      inputs(host)[0].value = '🎡'.repeat(MAX_LABEL_CHARS + 10);
+      const label = readLabels(host)[0];
+
+      expect(Array.from(label)).toHaveLength(MAX_LABEL_CHARS);
+      expect(label).not.toMatch(/[\uD800-\uDFFF]/u);
+    });
   });
 });
 

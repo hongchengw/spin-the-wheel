@@ -4,6 +4,7 @@ import {
   estimateLabelWidth,
   MIN_SLICES,
   MAX_SLICES,
+  MIN_CHAR_WIDTH,
 } from '../src/wheel';
 
 /** `n` short, distinct labels. */
@@ -187,6 +188,56 @@ describe('buildWheel', () => {
     expect(() => buildWheel([])).toThrow(Error);
     expect(() => buildWheel(['Only'])).toThrow(Error);
     expect(() => buildWheel(labelsOfLength(13))).toThrow(Error);
+  });
+});
+
+/**
+ * Label fitting drops one character per attempt and re-measures the whole
+ * candidate, so its cost is quadratic in where the walk starts. Starting it at
+ * the raw label length meant an oversized label — reachable by writing past the
+ * input's `maxlength` — could block the main thread for tens of seconds, which
+ * a user experiences as a hung tab rather than a slow one.
+ *
+ * The walk now starts at the longest run that could possibly fit, so these
+ * tests pin both halves of that claim: the cost no longer tracks the input
+ * length, and the output is unchanged by the new starting point.
+ */
+describe('oversized labels', () => {
+  const HUGE = 'a'.repeat(50_000);
+
+  it('fits a 50k-character label in well under a second', () => {
+    const started = Date.now();
+    buildWheel([HUGE, 'Sushi']);
+    // The pre-fix walk took ~30s at 20k characters and did not finish at 100k.
+    // A second is generous for the bounded version and still nowhere near it.
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('keeps the rendered label inside the radial budget', () => {
+    const svg = buildWheel([HUGE, 'Sushi']);
+    const node = texts(svg)[0];
+    const size = Number((node.getAttribute('font-size') ?? '').replace('px', ''));
+    expect(estimateLabelWidth(node.textContent ?? '', size)).toBeLessThanOrEqual(122);
+    expect(node.textContent).toMatch(/…$/u);
+  });
+
+  it('renders the same text as a label long enough to be cut anyway', () => {
+    // Both are far past what fits, so bounding the walk must not change where
+    // the cut lands.
+    const short = buildWheel(['a'.repeat(120), 'Sushi']);
+    const long = buildWheel([HUGE, 'Sushi']);
+    expect(texts(long)[0].textContent).toBe(texts(short)[0].textContent);
+  });
+
+  it('never leaves a character narrower than the bound the walk relies on', () => {
+    // The starting point is derived from MIN_CHAR_WIDTH, so a character that
+    // measured under it could fit more than the walk ever considers, and the
+    // label would be cut short for no reason.
+    const sample =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:;'!|`()[]{}/\\-@%…";
+    for (const ch of sample) {
+      expect(estimateLabelWidth(ch, 1)).toBeGreaterThanOrEqual(MIN_CHAR_WIDTH);
+    }
   });
 });
 

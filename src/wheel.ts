@@ -12,6 +12,16 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export const MIN_SLICES = 2;
 export const MAX_SLICES = 12;
 
+/**
+ * Longest label, in code points, that is worth carrying through the app.
+ *
+ * Well past what any slice can show — the point is not the visual fit, which
+ * `fitLabel` handles, but having a single hard ceiling that the input field and
+ * the label reader both derive from, so no unbounded string ever reaches the
+ * geometry.
+ */
+export const MAX_LABEL_CHARS = 24;
+
 const CENTER = 200;
 const RADIUS = 180;
 const LABEL_RADIUS = 115;
@@ -43,6 +53,13 @@ const LABEL_BUDGET = 122;
  * humanist sans; they only have to be good enough to keep text inside a rim
  * it is already 4 units clear of.
  */
+/**
+ * The narrowest advance `charWidth` can return. Used to bound the fitting walk,
+ * so it must stay a true lower bound — tests/wheel.test.ts asserts no character
+ * measures under it.
+ */
+export const MIN_CHAR_WIDTH = 0.28;
+
 function charWidth(ch: string): number {
   if ("iljI.,:;'!|`".includes(ch)) return 0.32;
   if (ch === ' ') return 0.28;
@@ -104,11 +121,26 @@ function setAttrs(el: Element, attrs: Record<string, string>): void {
   }
 }
 
-/** Trims a label until it fits the radial budget, adding an ellipsis if cut. */
+/**
+ * Trims a label until it fits the radial budget, adding an ellipsis if cut.
+ *
+ * The walk drops one character per attempt and re-measures the whole candidate
+ * each time, so its cost is quadratic in where it starts. Starting it at the
+ * raw label length made that the caller's problem: a 20k-character label —
+ * reachable by writing past the input's `maxlength` — took 30 seconds of
+ * blocked main thread, which is a frozen tab rather than a slow one.
+ *
+ * So it starts at the longest run that could possibly fit instead. No label can
+ * carry more than `LABEL_BUDGET / (MIN_CHAR_WIDTH * fontSize)` characters
+ * whatever they are, and the walk would have had to descend past that point
+ * before anything fit — so the result is identical and the cost no longer
+ * depends on the input length at all.
+ */
 function fitLabel(label: string, fontSize: number): string {
   if (estimateLabelWidth(label, fontSize) <= LABEL_BUDGET) return label;
 
-  const chars = Array.from(label);
+  const ceiling = Math.ceil(LABEL_BUDGET / (MIN_CHAR_WIDTH * fontSize)) + 1;
+  const chars = Array.from(label).slice(0, ceiling);
   let end = chars.length;
   while (end > 0) {
     end -= 1;

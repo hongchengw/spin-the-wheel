@@ -6,7 +6,7 @@
  * that can survive a reload.
  */
 
-import { MIN_SLICES, MAX_SLICES, sliceToken } from './wheel';
+import { MIN_SLICES, MAX_SLICES, MAX_LABEL_CHARS, sliceToken } from './wheel';
 
 export const DEFAULT_OPTION_COUNT = 2;
 export const MIN_OPTION_COUNT = MIN_SLICES;
@@ -111,7 +111,7 @@ function buildRow(n: number): HTMLLIElement {
   input.name = fieldId(n);
   input.placeholder = defaultLabel(n);
   input.dataset.option = String(n);
-  input.setAttribute('maxlength', '24');
+  input.setAttribute('maxlength', String(MAX_LABEL_CHARS));
   input.setAttribute('autocomplete', 'off');
 
   body.append(label, input);
@@ -286,12 +286,29 @@ export function renderSetupPanel(host: HTMLElement): void {
 }
 
 /**
- * Reads the option fields from `root`, trimming each value and falling back
- * to `Option N` for anything blank.
+ * Caps a label at `MAX_LABEL_CHARS`.
+ *
+ * The input carries the same cap as `maxlength`, but that is a DOM attribute
+ * rather than an invariant: devtools, an extension, or any programmatic write
+ * to `value` goes straight past it. Everything downstream measures the string
+ * it is handed, so an unbounded one is unbounded work. This function sits on
+ * the DOM-to-logic boundary, which is the one place the cap cannot be edited
+ * away from.
+ *
+ * Sliced by code point rather than UTF-16 unit, so a cut landing inside an
+ * emoji cannot leave a lone surrogate behind.
+ */
+function clampLabel(value: string): string {
+  return Array.from(value).slice(0, MAX_LABEL_CHARS).join('').trimEnd();
+}
+
+/**
+ * Reads the option fields from `root`, trimming and capping each value and
+ * falling back to `Option N` for anything blank.
  */
 export function readLabels(root: ParentNode): string[] {
   return optionInputs(root).map((input, i) => {
-    const value = input.value.trim();
+    const value = clampLabel(input.value.trim());
     return value === '' ? defaultLabel(i + 1) : value;
   });
 }
